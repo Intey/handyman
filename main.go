@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -34,6 +35,7 @@ type runTaskParams struct {
 type runTaskResult struct {
 	Status  int    `json:"error_code"`
 	Message string `json:"output"`
+	err     error
 }
 
 func extractRunTaskParams(r *http.Request) (runTaskParams, error) {
@@ -70,21 +72,31 @@ func extractRunTaskParams(r *http.Request) (runTaskParams, error) {
 		return runTaskParams{}, errors.New("Empty source code")
 	}
 
-	// TODO: get container type
-	res.containerType = "python_env"
+	if strings.HasPrefix(res.chapterId, "python") {
+		res.containerType = "python_env"
+	} else if strings.HasPrefix(res.chapterId, "rust") {
+		res.containerType = "rust_env"
+	} else {
+		return runTaskParams{}, errors.New("Couldn't specify container for chapter " + res.chapterId)
+	}
 
 	return res, nil
 }
 
 func generateTaskId(params runTaskParams) string {
-	return "some_task_id"
+	return fmt.Sprintf("%s_%s_%d_%d", params.chapterId, params.userId,
+		params.taskIndex, time.Now().UnixNano())
 }
 
-func communicateWatchman(params runTaskParams) (runTaskResult, error) {
+func communicateWatchman(params runTaskParams, c chan runTaskResult) {
+	defer close(c)
+	res := new(runTaskResult)
+
+	taskId := generateTaskId(params)
 	postBody, _ := json.Marshal(map[string]string{
 		"container_type": params.containerType,
-		"source":    params.sourceCode,
-		"task_id": generateTaskId(params),
+		"source":         params.sourceCode,
+		"task_id":        taskId,
 	})
 	reqBody := bytes.NewBuffer(postBody)
 
@@ -96,30 +108,38 @@ func communicateWatchman(params runTaskParams) (runTaskResult, error) {
 
 	if err != nil {
 		log.Printf("Couldn't send request to watchman %v", err)
-		return runTaskResult{}, err
+		res.err = err
+		c <- *res
+		return
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return runTaskResult{}, errors.New("HTTP error " + strconv.Itoa(resp.StatusCode))
+		res.err = errors.New("HTTP error " + strconv.Itoa(resp.StatusCode))
+		c <- *res
+		return
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("Couldn't read body %v", err)
-		return runTaskResult{}, err
+		res.err = err
+		c <- *res
+		return
 	}
 
-	var res runTaskResult
 	err = json.Unmarshal(body, &res)
 
 	if err != nil {
 		log.Printf("Couldn't parse json body %v", err)
-		return runTaskResult{}, err
+		res.err = err
+		c <- *res
+		return
 	}
 
-	return res, nil
+	res.err = nil
+	c <- *res
 }
 
 func HandleRunTask(w http.ResponseWriter, r *http.Request) {
@@ -135,19 +155,23 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("Parsed url params", params)
+	log.Printf("Parsed url params. userId=%v chapterId=%v taskIndex=%v",
+		params.userId, params.chapterId, params.taskIndex)
+	c := make(chan runTaskResult)
 
-	runTaskRes, err := communicateWatchman(params)
-	if err != nil {
+	go communicateWatchman(params, c)
+	res := <-c
+
+	if res.err != nil {
 		body, _ := json.Marshal(map[string]string{
-			"error": fmt.Sprintf("Couldn't communicate with tasks runner: %s", err),
+			"error": fmt.Sprintf("Couldn't communicate with tasks runner: %s", res.err),
 		})
 		w.Write(body)
 		return
 	}
 
-	log.Println("Successfully communicated watchman: " + string(runTaskRes.Status))
-	json.NewEncoder(w).Encode(runTaskRes)
+	log.Printf("Successfully communicated watchman: %v", res.Status)
+	json.NewEncoder(w).Encode(res)
 }
 
 func main() {
