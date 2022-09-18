@@ -2,6 +2,9 @@ package internal
 
 import (
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"path/filepath"
 
 	"github.com/gammazero/workerpool"
 	_ "github.com/lib/pq"
@@ -177,4 +180,64 @@ func UpdateCourseStatus(userId string, courseId string, chapterId string) {
 		"user_id":   userId,
 		"course_id": courseId,
 	}).Info("Updated course status for user")
+}
+
+func GetCoursesForUser(userId string) CoursesForUser {
+	query := `
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title,
+		(CASE WHEN course_progress.status IS NULL THEN 'not_started' ELSE course_progress.status::varchar(40) END) as status 
+		FROM courses LEFT JOIN course_progress 
+		ON course_progress.course_id = courses.course_id AND course_progress.user_id=$1
+	`
+	rows, err := DB.Query(query, userId)
+	if err != nil {
+		return CoursesForUser{}
+	}
+
+	defer rows.Close()
+
+	var courses CoursesForUser
+
+	for rows.Next() {
+		var course CourseForUser
+
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Status); err != nil {
+			log.WithFields(log.Fields{
+				"user_id": userId,
+				"error":   err.Error(),
+			}).Info("Couldn't parse row from courses selection for user")
+			return CoursesForUser{}
+		}
+
+		courses.Courses = append(courses.Courses, course)
+	}
+
+	return courses
+}
+
+func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-type", "application/json")
+
+	userId := GetUserId(r)
+	if len(userId) == 0 {
+		body, _ := json.Marshal(map[string]string{
+			"error": "Empty user id",
+		})
+		w.Write(body)
+		return
+	}
+
+	courses := GetCoursesForUser(userId)
+
+	for i := 0; i < len(courses.Courses); i++ {
+		courses.Courses[i].DescriptionPath = filepath.Join(courses.Courses[i].Path, "description.md")
+		courses.Courses[i].IconPath = filepath.Join(courses.Courses[i].Path, "icon.svg")
+	}
+
+	log.WithFields(log.Fields{
+		"user_id": userId,
+	}).Info("Successfully got courses")
+
+	json.NewEncoder(w).Encode(courses)
 }

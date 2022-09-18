@@ -48,6 +48,10 @@ curl -X POST \
   "http://localhost:8080/run_task?user_id=mesozoic.drones"
 ```
 
+```bash
+curl  "http://localhost:8080/get_courses?user_id=mesozoic.drones"
+```
+
 ## Полезные SQL-запросы для отладки и разворачивания базы
 ```
 -- show running queries
