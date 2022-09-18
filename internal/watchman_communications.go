@@ -131,7 +131,7 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(body)
 		return
 	}
-
+	userSourceCode := opts.SourceCode
 	opts.SourceCode, err = InjectCodeToWrapper(opts.TaskId, opts.SourceCode)
 	if err != nil {
 		body, _ := json.Marshal(map[string]string{
@@ -152,6 +152,10 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(body)
 		return
 	}
+
+	WP.Submit(func() {
+		UpdateTaskStatus(opts.userId, opts.TaskId, res.Status, userSourceCode)
+	})
 
 	log.WithFields(log.Fields{
 		"status": res.Status,
