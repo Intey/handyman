@@ -89,3 +89,42 @@ func UpdateChapterStatus(w http.ResponseWriter, r *http.Request) {
 	}).Debug("Parsed url params")
 
 }
+
+// Returns postgres TYPE edu_material_status
+func getEduMaterialStatus(code int) string {
+	if code == 0 {
+		return "completed"
+	}
+
+	return "in_progress"
+}
+
+func UpdateTaskStatus(userId string, taskId string, statusCode int, solutionText string) {
+	taskStatus := getEduMaterialStatus(statusCode)
+	const attemptsCount = 1
+
+	const query = `
+		INSERT INTO 
+		task_progress(user_id, task_id, status, solution_text, attempts_count)
+		VALUES($1, $2, $3, $4, $5)
+		ON CONFLICT ON CONSTRAINT unique_user_task_id
+		DO UPDATE SET 
+		status = EXCLUDED.status, 
+		solution_text = EXCLUDED.solution_text,
+		attempts_count = task_progress.attempts_count + EXCLUDED.attempts_count
+	`
+	_, err := DB.Exec(query, userId, taskId, taskStatus, solutionText, attemptsCount)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"user_id":  userId,
+			"task_id":  taskId,
+			"db_error": err.Error(),
+		}).Error("Couldn't update task status for user")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"user_id": userId,
+		"task_id": taskId,
+	}).Info("Updated task status for user")
+}
