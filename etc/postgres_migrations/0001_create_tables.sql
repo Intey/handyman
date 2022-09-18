@@ -29,6 +29,7 @@ ALTER TABLE users OWNER TO senjun;
 CREATE TABLE courses (
     course_id varchar NOT NULL PRIMARY KEY,
     path_on_disk varchar NOT NULL,
+    title varchar NOT NULL,
     type course_type default 'free' NOT NULL
 );
 ALTER TABLE courses OWNER TO senjun;
@@ -86,8 +87,8 @@ ALTER TABLE task_progress OWNER TO senjun;
 
 -- FILL TABLES
 
-INSERT INTO courses(course_id, path_on_disk) VALUES('python', '/courses/python');
-INSERT INTO courses(course_id, path_on_disk) VALUES('rust', '/courses/rust');
+INSERT INTO courses(course_id, title, path_on_disk) VALUES('python', 'Python', '/courses/python');
+INSERT INTO courses(course_id, title, path_on_disk) VALUES('rust', 'Rust', '/courses/rust');
 
 INSERT INTO users(user_id, pass_hash, is_blocked, name, surname) 
 VALUES('mesozoic.drones', 'fec790f175bef65ca00c3887fa85af51', false, 'Olga', 'Khlopkova');

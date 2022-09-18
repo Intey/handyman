@@ -33,6 +33,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/run_task", internal.HandleRunTask)
+	r.HandleFunc("/get_courses", internal.HandleGetCourses)
 
 	srv := &http.Server{
 		Handler:      r,
