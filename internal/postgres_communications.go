@@ -367,7 +367,9 @@ func GetChapterForUser(opts Options) (ChapterContent, error) {
 		return ChapterContent{}, err
 	}
 
-	chapterContent.ContentPath = contentPath
+	chapterText, _ := ReadTextFile(contentPath)
+
+	chapterContent.Content = chapterText
 	chapterContent.Tasks = GetTasks(chapterContent.ChapterId, opts.userId)
 
 	return chapterContent, nil
@@ -480,8 +482,11 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := 0; i < len(courses); i++ {
-		courses[i].DescriptionPath = filepath.Join(courses[i].Path, "description.md")
-		courses[i].IconPath = filepath.Join(courses[i].Path, "icon.svg")
+		descr, _ := ReadTextFile(filepath.Join(rootCourses, courses[i].Path, "description.md"))
+		courses[i].Description = descr
+
+		iconSvg, _ := ReadTextFile(filepath.Join(rootCourses, courses[i].Path, "icon.svg"))
+		courses[i].Icon = iconSvg
 	}
 
 	log.WithFields(log.Fields{

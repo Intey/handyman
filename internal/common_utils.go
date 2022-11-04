@@ -122,21 +122,25 @@ func GetPathToChapterText(courseId string, chapterId string) (string, error) {
 	return filepath.Join(rootCourses, courseId, chapterId, "text.md"), nil
 }
 
-func InjectCodeToWrapper(opts *Options) error {
-	wrapperPath := GetPathToTaskWrapper(opts)
-
-	content, err := os.ReadFile(wrapperPath)
+func ReadTextFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error":           err,
-			"task_id":         opts.TaskId,
-			"path_to_wrapper": wrapperPath,
-		}).Error("Couldn't read wrapper text")
-		return err
+			"filepath": path,
+		}).Error("Couldn't read file")
+		return "", err
 	}
 
+	return string(content), err
+}
+
+func InjectCodeToWrapper(opts *Options) error {
+	wrapperPath := GetPathToTaskWrapper(opts)
+	content, err := ReadTextFile(wrapperPath)
+
 	opts.SourceCode = strings.ReplaceAll(string(content), injectMarker, opts.SourceCode)
-	return nil
+	return err
 }
 
 type CourseForUser struct {
@@ -145,8 +149,8 @@ type CourseForUser struct {
 	Status          string `json:"status"`
 	Path            string `json:"-"`
 	Title           string `json:"title"`
-	IconPath        string `json:"path_icon"`
-	DescriptionPath string `json:"path_description"`
+	Icon        string `json:"icon"`
+	Description string `json:"description"`
 }
 
 type ChapterForUser struct {
@@ -163,7 +167,7 @@ type TaskForUser struct {
 
 type ChapterContent struct {
 	ChapterForUser
-	ContentPath string        `json:"path_content"`
+	Content string        `json:"content"`
 	Tasks       []TaskForUser `json:"tasks"`
 }
 

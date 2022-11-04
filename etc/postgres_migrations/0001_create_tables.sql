@@ -72,8 +72,8 @@ ALTER TABLE task_progress OWNER TO senjun;
 -- FILL TABLES
 
 INSERT INTO courses(course_id, title, path_on_disk) VALUES
-('python', 'Python', '/courses/python'),
-('rust', 'Rust', '/courses/rust');
+('python', 'Python', 'python'),
+('rust', 'Rust', 'rust');
 
 INSERT INTO chapters(chapter_id, course_id, title) VALUES
 ('python_chapter_0010', 'python', 'Ключевые факты'),
