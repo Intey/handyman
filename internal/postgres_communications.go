@@ -283,6 +283,17 @@ func GetPrevChapterId(courseId string, chapterId string) (string, error) {
 	return prevChapterId, err
 }
 
+func GetNextChapterId(courseId string, chapterId string) (string, error) {
+	query := `
+		SELECT chapter_id FROM chapters WHERE course_id=$1 AND chapter_id > $2 ORDER BY chapter_id ASC LIMIT 1
+	`
+	var nextChapterId string
+
+	row := DB.QueryRow(query, courseId, chapterId)
+	err := row.Scan(&nextChapterId)
+	return nextChapterId, err
+}
+
 func GetChapterProgress(userId string, chapterId string) (string, error) {
 	query := `
 		SELECT status FROM chapter_progress WHERE user_id=$1 AND chapter_id=$2
@@ -624,4 +635,60 @@ func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
 	}).Info("Successfully got chapter")
 
 	json.NewEncoder(w).Encode(chapter)
+}
+
+func HandleGetProgress(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-type", "application/json")
+
+	opts, err := ParseOptions(r)
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Invalid request: %s", err),
+		})
+		w.Write(body)
+		return
+	}
+
+	if len(opts.userId) == 0 || len(opts.ChapterId) == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Couldn't get required request params",
+		})
+		return
+	}
+
+	var userProgress UserProgress
+	tasks := GetTasks(opts.ChapterId, opts.userId)
+	for _, task := range tasks {
+		if task.Status != "completed" {
+			userProgress.NotCompletedTaskIds = append(userProgress.NotCompletedTaskIds, task.TaskId)
+		}
+	}
+
+	if len(userProgress.NotCompletedTaskIds) > 0 {
+		userProgress.StatusOnChapter = "chapter_not_completed"
+	} else {
+		userProgress.StatusOnChapter = "chapter_completed"
+		nextChapterId, err := GetNextChapterId(opts.CourseId, opts.ChapterId)
+		if err != nil && err == sql.ErrNoRows {
+			userProgress.IsCourseCompleted = true
+		} else if err != nil {
+			log.WithFields(log.Fields{
+				"user_id":   opts.userId,
+				"course_id": opts.CourseId,
+				"chapter_id":    opts.ChapterId,
+				"error":     err.Error(),
+			}).Error("Couldn't get user progress on chapter")
+
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Couldn't get progress",
+			})
+			return
+		} else {
+			userProgress.IsCourseCompleted = false
+			userProgress.NextChapterId = nextChapterId
+		}
+	}
+
+	json.NewEncoder(w).Encode(userProgress)
 }
