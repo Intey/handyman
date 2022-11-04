@@ -142,3 +142,10 @@ type ChapterContent struct {
 	ContentPath string        `json:"path_content"`
 	Tasks       []TaskForUser `json:"tasks"`
 }
+
+type UserProgress struct {
+	NotCompletedTaskIds []string `json:"not_completed_tasks"`
+	StatusOnChapter string `json:"user_status_on_chapter"`
+	NextChapterId string `json:"next_chapter_id"`
+	IsCourseCompleted bool `json:"is_course_completed"`
+}

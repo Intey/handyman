@@ -14,15 +14,23 @@ CREATE TYPE course_type AS ENUM('free', 'paid');
 
 -- Tables & indices
 CREATE TABLE users (
-    -- user_id is user login
+    user_id varchar NOT NULL PRIMARY KEY
+);
+ALTER TABLE users OWNER TO senjun;
+
+
+CREATE TABLE user_data (
     user_id varchar NOT NULL PRIMARY KEY,
+    login varchar NOT NULL,
     pass_hash varchar NOT NULL,
     created timestamptz default current_timestamp,
     is_blocked boolean NOT NULL,
     name varchar,
-    surname varchar
+    surname varchar,
+    phone varchar NOT NULL,
+    CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES users(user_id)
 );
-ALTER TABLE users OWNER TO senjun;
+ALTER TABLE user_data OWNER TO senjun;
 
 
 CREATE TABLE courses (
@@ -85,23 +93,27 @@ ALTER TABLE task_progress OWNER TO senjun;
 
 -- FILL TABLES
 
-INSERT INTO courses(course_id, title, path_on_disk) VALUES('python', 'Python', '/courses/python');
-INSERT INTO courses(course_id, title, path_on_disk) VALUES('rust', 'Rust', '/courses/rust');
+INSERT INTO courses(course_id, title, path_on_disk) VALUES
+('python', 'Python', '/courses/python'),
+('rust', 'Rust', '/courses/rust');
 
-INSERT INTO users(user_id, pass_hash, is_blocked, name, surname) 
-VALUES('mesozoic.drones', 'fec790f175bef65ca00c3887fa85af51', false, 'Olga', 'Khlopkova');
+INSERT INTO chapters(chapter_id, course_id, title) VALUES
+('python_chapter_0010', 'python', 'Ключевые факты'),
+('python_chapter_0020', 'python', 'Синтаксис'),
+('python_chapter_0030', 'python', 'Синтаксис: новые фишки');
 
-INSERT INTO users(user_id, pass_hash, is_blocked, name, surname) 
-VALUES('perikrone', 'cad4b69b0a2ef573722fc6830fabeef6', false, 'Veseliy', 'Buldozer');
-
-INSERT INTO chapters(chapter_id, course_id, title) VALUES('python_chapter_0010', 'python', 'Ключевые факты');
-INSERT INTO chapters(chapter_id, course_id, title) VALUES('python_chapter_0020', 'python', 'Синтаксис');
-INSERT INTO chapters(chapter_id, course_id, title) VALUES('python_chapter_0030', 'python', 'Синтаксис: новые фишки');
-
-INSERT INTO tasks(task_id, chapter_id) VALUES('python_chapter_0010_task_0010', 'python_chapter_0010');
-INSERT INTO tasks(task_id, chapter_id) VALUES('python_chapter_0010_task_0020', 'python_chapter_0010');
-INSERT INTO tasks(task_id, chapter_id) VALUES('python_chapter_0010_task_0030', 'python_chapter_0010');
+INSERT INTO tasks(task_id, chapter_id) VALUES
+('python_chapter_0010_task_0010', 'python_chapter_0010'),
+('python_chapter_0010_task_0020', 'python_chapter_0010'),
+('python_chapter_0010_task_0030', 'python_chapter_0010');
 
 
+-- FILL TABLES FOR TEST PURPOSES ONLY
 
-INSERT INTO chapter_progress(user_id, chapter_id, status) VALUES('mesozoic.drones', 'python_chapter_0010', 'in_progress');
+INSERT INTO users(user_id) VALUES
+('mesozoic.drones'),
+('khva'),
+('Buldozer');
+
+INSERT INTO chapter_progress(user_id, chapter_id, status) VALUES
+('mesozoic.drones', 'python_chapter_0010', 'in_progress');
