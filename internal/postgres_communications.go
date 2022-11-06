@@ -21,10 +21,12 @@ var WP *workerpool.WorkerPool
 
 const connStr = "postgresql://senjun:some_password@127.0.0.1:5432/senjun?sslmode=disable"
 
+var Logger *log.Logger
+
 func ConnectDb() *sql.DB {
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"error": err,
 		}).Fatal("Couldn't call Open() for db")
 	}
@@ -32,7 +34,7 @@ func ConnectDb() *sql.DB {
 	err = db.Ping()
 
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"connStr": connStr,
 			"error":   err,
 		}).Fatal("Couldn't communicate db")
@@ -66,7 +68,7 @@ func UpdateTaskStatus(userId string, taskId string, statusCode int, solutionText
 	`
 	_, err := DB.Exec(query, userId, taskId, taskStatus, solutionText, attemptsCount)
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"user_id":  userId,
 			"task_id":  taskId,
 			"db_error": err.Error(),
@@ -74,10 +76,41 @@ func UpdateTaskStatus(userId string, taskId string, statusCode int, solutionText
 		return
 	}
 
-	log.WithFields(log.Fields{
+	Logger.WithFields(log.Fields{
 		"user_id": userId,
 		"task_id": taskId,
 	}).Info("Updated task status for user")
+}
+
+func GetCourses() []CourseForUser {
+	query := `
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title
+		FROM courses
+	`
+
+	rows, err := DB.Query(query)
+	if err != nil {
+		return []CourseForUser{}
+	}
+
+	defer rows.Close()
+
+	courses := []CourseForUser{}
+
+	for rows.Next() {
+		var course CourseForUser
+
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title); err != nil {
+			Logger.WithFields(log.Fields{
+				"error":   err.Error(),
+			}).Info("Couldn't parse row from courses selection")
+			return []CourseForUser{}
+		}
+
+		courses = append(courses, course)
+	}
+
+	return courses
 }
 
 func GetCoursesForUser(userId string) []CourseForUser {
@@ -102,7 +135,7 @@ func GetCoursesForUser(userId string) []CourseForUser {
 		var course CourseForUser
 
 		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Status); err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
 			}).Info("Couldn't parse row from courses selection for user")
@@ -137,7 +170,7 @@ func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
 		var course CourseForUser
 
 		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title); err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
 			}).Info("Couldn't parse row from courses selection for user")
@@ -175,7 +208,7 @@ func GetChaptersForUser(userId string, courseId string) []ChapterForUser {
 		var chapter ChapterForUser
 
 		if err := rows.Scan(&chapter.ChapterId, &chapter.Title, &chapter.Status); err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
 			}).Error("Couldn't parse row from chapters selection for user")
@@ -349,7 +382,7 @@ func GetCourseProgressForUser(courseId string, userId string) (string, error) {
 
 	for rows.Next() {
 		if err := rows.Scan(&status); err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id":   userId,
 				"course_id": courseId,
 				"error":     err.Error(),
@@ -375,7 +408,7 @@ func GetChapterProgressForUser(chapterId string, userId string) (string, error) 
 
 	for rows.Next() {
 		if err := rows.Scan(&status); err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id":   userId,
 				"chapter_id": chapterId,
 				"error":     err.Error(),
@@ -412,7 +445,7 @@ func GetTasks(chapterId string, userId string) []TaskForUser {
 		var task TaskForUser
 
 		if err := rows.Scan(&task.TaskId, &task.Status, &task.UserCode); err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
 			}).Info("Couldn't parse row from tasks selection for user")
@@ -435,7 +468,7 @@ func UpdateCourseProgressForUser(courseId string, status string, userId string) 
 	`
 	_, err := DB.Exec(query, userId, courseId, status)
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"user_id":   userId,
 			"course_id": courseId,
 			"db_error":  err.Error(),
@@ -451,22 +484,20 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-type", "application/json")
 
 	opts, err := ParseOptions(r)
-	if err != nil {
-		body, _ := json.Marshal(map[string]string{
-			"error": fmt.Sprintf("Invalid request: %s", err),
-		})
-		w.Write(body)
-		return
-	}
 
 	var courses []CourseForUser
 
-	if opts.Status == "all" {
-		courses = GetCoursesForUser(opts.userId)
+	// Case when user is not logged
+	if err != nil {
+		courses = GetCourses()
 	} else {
-		courses = GetCoursesForUserByStatus(opts.userId, opts.Status)
+		if opts.Status == "all" {
+			courses = GetCoursesForUser(opts.userId)
+		} else {
+			courses = GetCoursesForUserByStatus(opts.userId, opts.Status)
+		}
 	}
-
+	
 	for i := 0; i < len(courses); i++ {
 		descr, _ := ReadTextFile(filepath.Join(rootCourses, courses[i].Path, "description.md"))
 		courses[i].Description = descr
@@ -475,7 +506,7 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 		courses[i].Icon = iconSvg
 	}
 
-	log.WithFields(log.Fields{
+	Logger.WithFields(log.Fields{
 		"user_id": opts.userId,
 		"status":  opts.Status,
 	}).Info("Successfully got courses")
@@ -505,7 +536,7 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 
 	curStatus, err := GetCourseProgressForUser(opts.CourseId, opts.userId)
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"user_id":   opts.userId,
 			"course_id": opts.CourseId,
 			"error":     err.Error(),
@@ -528,7 +559,7 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 
 	err = UpdateCourseProgressForUser(opts.CourseId, opts.Status, opts.userId)
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"user_id":   opts.userId,
 			"course_id": opts.CourseId,
 			"status":    opts.Status,
@@ -540,6 +571,11 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	Logger.WithFields(log.Fields{
+		"user_id":    opts.userId,
+		"course_id": opts.CourseId,
+	}).Info("Updated course status for user")
 
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
@@ -581,7 +617,7 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 
 	curStatus, err := GetChapterProgressForUser(opts.ChapterId, opts.userId)
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 			"user_id":   opts.userId,
 			"chapter_id": opts.ChapterId,
 			"error":     err.Error(),
@@ -633,7 +669,7 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 	err = UpdateChapterStatus(opts.userId, opts.ChapterId, opts.Status)
 
 	if err != nil {
-		log.WithFields(log.Fields{
+		Logger.WithFields(log.Fields{
 		"user_id":    opts.userId,
 		"chapter_id": opts.ChapterId,
 		"db_error":   err.Error(),
@@ -646,7 +682,7 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.WithFields(log.Fields{
+	Logger.WithFields(log.Fields{
 		"user_id":    opts.userId,
 		"chapter_id": opts.ChapterId,
 	}).Info("Updated chapter status for user")
@@ -681,7 +717,7 @@ func HandleGetChapters(w http.ResponseWriter, r *http.Request) {
 
 	chapters := GetChaptersForUser(opts.userId, opts.CourseId)
 
-	log.WithFields(log.Fields{
+	Logger.WithFields(log.Fields{
 		"user_id":   opts.userId,
 		"course_id": opts.CourseId,
 	}).Info("Successfully got chapters")
@@ -719,7 +755,7 @@ func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.WithFields(log.Fields{
+	Logger.WithFields(log.Fields{
 		"user_id":    opts.userId,
 		"course_id":  opts.CourseId,
 		"chapter_id": opts.ChapterId,
@@ -748,6 +784,14 @@ func HandleGetProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	chapterStatus, err := GetChapterProgress(opts.userId, opts.ChapterId)
+	if err != nil || len(chapterStatus) == 0 || chapterStatus == "not_started" {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "User doesn't have permissions on this chapter",
+		})
+		return
+	}
+
 	var userProgress UserProgress
 	tasks := GetTasks(opts.ChapterId, opts.userId)
 	for _, task := range tasks {
@@ -764,7 +808,7 @@ func HandleGetProgress(w http.ResponseWriter, r *http.Request) {
 		if err != nil && err == sql.ErrNoRows {
 			userProgress.IsCourseCompleted = true
 		} else if err != nil {
-			log.WithFields(log.Fields{
+			Logger.WithFields(log.Fields{
 				"user_id":    opts.userId,
 				"course_id":  opts.CourseId,
 				"chapter_id": opts.ChapterId,
