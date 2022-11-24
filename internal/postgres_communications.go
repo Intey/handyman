@@ -190,9 +190,8 @@ func GetChaptersForUser(userId string, courseId string) []ChapterForUser {
 		(CASE WHEN chapter_progress.status IS NULL THEN 'not_started' ELSE chapter_progress.status::varchar(40) END) as status
 		FROM chapters
 		LEFT JOIN chapter_progress ON
-		chapters.chapter_id = chapter_progress.chapter_id 
-		AND chapter_progress.user_id=$1
-		WHERE course_id=$2
+		chapters.chapter_id = chapter_progress.chapter_id AND chapter_progress.user_id=$1
+		WHERE  course_id=$2 ORDER BY chapters.chapter_id
 	`
 
 	rows, err := DB.Query(query, userId, courseId)
@@ -821,4 +820,79 @@ func HandleGetProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(userProgress)
+}
+
+func HandleGetActiveChapter(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-type", "application/json")
+
+	opts, err := ParseOptions(r)
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Invalid request: %s", err),
+		})
+		w.Write(body)
+		return
+	}
+
+	if len(opts.userId) == 0 || len(opts.CourseId) == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Couldn't get user_id or course_id",
+		})
+		return
+	}
+
+	courses := GetCoursesForUserByStatus(opts.userId, "in_progress")
+	hasAccess := false
+	for i := 0; i < len(courses); i++ {
+		if courses[i].CourseId == opts.CourseId {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		body, _ := json.Marshal(map[string]string{
+			"error": "Course is not in state 'in_progress' for user",
+		})
+		w.Write(body)
+		return
+	}
+
+	chapters := GetChaptersForUser(opts.userId, opts.CourseId)
+
+	for i := 0; i < len(chapters); i++ {
+		if chapters[i].Status == "in_progress" || chapters[i].Status == "not_started" {
+			opts.ChapterId = chapters[i].ChapterId
+
+			chapter, err := GetChapterForUser(opts)
+
+			if err != nil {
+				body, _ := json.Marshal(map[string]string{
+					"error": fmt.Sprintf("Couldn't get chapter for user: %s", err),
+				})
+				w.Write(body)
+				return
+			}
+
+			Logger.WithFields(log.Fields{
+				"user_id":    opts.userId,
+				"course_id":  opts.CourseId,
+				"chapter_id": opts.ChapterId,
+			}).Info("Successfully got chapter")
+
+			json.NewEncoder(w).Encode(chapter)
+			return
+		}
+	}
+
+	Logger.WithFields(log.Fields{
+		"user_id":   opts.userId,
+		"course_id": opts.CourseId,
+	}).Info("No active chapter for user")
+
+	body, _ := json.Marshal(map[string]string{
+		"error": "No active chapter for user",
+	})
+	w.Write(body)
 }
