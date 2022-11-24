@@ -84,6 +84,11 @@ curl -X POST   -d '{"course_id":"python"}'   "http://localhost:8080/get_chapter?
 curl -X POST   -d '{"chapter_id":"python_chapter_0010"}'   "http://localhost:8080/get_progress?user_id=4564"
 ```
 
+`/get_active_chapter` - получение первой по списку главы с задачами и их статусами для пользователя, которая находится в статусе `not_started` или `in_progress`
+```bash
+curl -X POST   -d '{"course_id":"python"}'   "http://localhost:8080/get_active_chapter?user_id=4564"
+```
+
 ## Настройка PostgreSQL в докере для отладки
 Чтобы начать работать с handyman, можно запустить контейнер  с постгресом:
 ```bash
