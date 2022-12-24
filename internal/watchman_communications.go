@@ -17,9 +17,11 @@ const timeoutReplyFromWatchman = 30 * time.Second
 const addrWatchman = "http://127.0.0.1:8000/check"
 
 type RunTaskResult struct {
-	Status  int    `json:"error_code"`
-	Message string `json:"output"`
-	err     error
+	Status      int    `json:"error_code"`
+	Output      string `json:"output"`
+	TestsStatus int    `json:"tests_error_code,omitempty"`
+	TestsError  string `json:"tests_error,omitempty"`
+	err         error
 }
 
 func extractRunTaskOptions(r *http.Request) (Options, error) {
@@ -37,7 +39,7 @@ func extractRunTaskOptions(r *http.Request) (Options, error) {
 		return Options{}, errors.New("empty course id")
 	}
 
-	if len(opts.SourceCode) == 0 {
+	if len(opts.SourceCodeOriginal) == 0 {
 		return Options{}, errors.New("empty source code")
 	}
 
@@ -61,7 +63,8 @@ func communicateWatchman(opts Options, c chan RunTaskResult) {
 	taskTmpId := genTaskTmpId(opts)
 	postBody, _ := json.Marshal(map[string]string{
 		"container_type": opts.containerType,
-		"source":         opts.SourceCode,
+		"source_test":    opts.SourceCodeTest,
+		"source_run":     opts.SourceCodeRun,
 		"task_id":        taskTmpId,
 	})
 	reqBody := bytes.NewBuffer(postBody)
@@ -145,11 +148,21 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userSourceCode := opts.SourceCode
-	err = InjectCodeToWrapper(&opts)
+	err = InjectCodeToTestWrapper(&opts)
+
 	if err != nil {
 		body, _ := json.Marshal(map[string]string{
-			"error": "Couldn't prepare tests for task runner",
+			"error": "Couldn't prepare tests for wrapper task runner",
+		})
+		w.Write(body)
+		return
+	}
+
+	err = InjectCodeToRunWrapper(&opts)
+
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": "Couldn't prepare run wrapper for task runner",
 		})
 		w.Write(body)
 		return
@@ -168,11 +181,12 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WP.Submit(func() {
-		UpdateTaskStatus(opts.userId, opts.TaskId, res.Status, userSourceCode)
+		UpdateTaskStatus(opts.userId, opts.TaskId, res.Status == 0 && res.TestsStatus == 0, opts.SourceCodeOriginal)
 	})
 
 	Logger.WithFields(log.Fields{
 		"user_code_status": res.Status,
+		"tests_code":       res.TestsStatus,
 	}).Info("Successfully communicated watchman")
 
 	json.NewEncoder(w).Encode(res)
