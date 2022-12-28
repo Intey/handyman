@@ -44,16 +44,16 @@ func ConnectDb() *sql.DB {
 }
 
 // Returns postgres TYPE edu_material_status
-func getEduMaterialStatus(code int) string {
-	if code == 0 {
+func getEduMaterialStatus(isSolved bool) string {
+	if isSolved {
 		return "completed"
 	}
 
 	return "in_progress"
 }
 
-func UpdateTaskStatus(userId string, taskId string, statusCode int, solutionText string) {
-	taskStatus := getEduMaterialStatus(statusCode)
+func UpdateTaskStatus(userId string, taskId string, isSolved bool, solutionText string) {
+	taskStatus := getEduMaterialStatus(isSolved)
 	const attemptsCount = 1
 
 	const query = `
@@ -79,6 +79,7 @@ func UpdateTaskStatus(userId string, taskId string, statusCode int, solutionText
 	Logger.WithFields(log.Fields{
 		"user_id": userId,
 		"task_id": taskId,
+		"status":  taskStatus,
 	}).Info("Updated task status for user")
 }
 

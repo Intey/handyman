@@ -7,15 +7,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 	log "github.com/sirupsen/logrus"
 )
 
 type Options struct {
-	CourseId   string `json:"course_id,omitempty"`
-	ChapterId  string `json:"chapter_id,omitempty"`
-	TaskId     string `json:"task_id,omitempty"`
-	SourceCode string `json:"solution_text,omitempty"`
-	Status     string `json:"status,omitempty"`
+	CourseId           string `json:"course_id,omitempty"`
+	ChapterId          string `json:"chapter_id,omitempty"`
+	TaskId             string `json:"task_id,omitempty"`
+	SourceCodeOriginal string `json:"solution_text,omitempty"`
+	SourceCodeRun      string `json:"text_for_exed,omitempty"`
+	SourceCodeTest     string `json:"text_for_test",omitempty`
+	Status             string `json:"status,omitempty"`
 	// Must be extracted later not from HTTP POST body, but
 	// from header with JWT access token
 	userId string
@@ -113,8 +116,19 @@ const injectMarker = "#INJECT-b585472fa"
 // Gets root path to courses (for example '/courses'),
 // opts.TaskId (for example 'python_chapter_0010_task_0060'),
 // returns path to task wrapper
-func GetPathToTaskWrapper(opts *Options) string {
-	return filepath.Join(rootCourses, opts.CourseId, opts.ChapterId, "tasks", opts.TaskId, "wrapper")
+func GetPathToTestWrapper(opts *Options) string {
+	return filepath.Join(rootCourses, opts.CourseId, opts.ChapterId, "tasks", opts.TaskId, "wrapper_test")
+}
+
+func GetPathToRunWrapper(opts *Options) string {
+	pathRun := filepath.Join(rootCourses, opts.CourseId, opts.ChapterId, "tasks", opts.TaskId, "wrapper_run")
+	_, err := os.Stat(pathRun)
+
+	if os.IsExist(err) {
+		return pathRun
+	}
+
+	return filepath.Join(rootCourses, opts.CourseId, "wrapper_run_fallback")
 }
 
 func GetPathToChapterText(courseId string, chapterId string) (string, error) {
@@ -125,7 +139,7 @@ func ReadTextFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		Logger.WithFields(log.Fields{
-			"Error":           err,
+			"Error":    err,
 			"filepath": path,
 		}).Error("Couldn't read file")
 		return "", err
@@ -134,21 +148,27 @@ func ReadTextFile(path string) (string, error) {
 	return string(content), err
 }
 
-func InjectCodeToWrapper(opts *Options) error {
-	wrapperPath := GetPathToTaskWrapper(opts)
+func InjectCodeToTestWrapper(opts *Options) error {
+	wrapperPath := GetPathToTestWrapper(opts)
 	content, err := ReadTextFile(wrapperPath)
 
-	Logger.WithFields(log.Fields{
-		"filepath": wrapperPath,
-		"content": content,
-	}).Info("Read wrapper")
-
-	opts.SourceCode = strings.ReplaceAll(string(content), injectMarker, opts.SourceCode)
+	opts.SourceCodeTest = strings.ReplaceAll(string(content), injectMarker, opts.SourceCodeOriginal)
 
 	Logger.WithFields(log.Fields{
 		"filepath": wrapperPath,
-		"injected": opts.SourceCode,
-	}).Info("Injected wrapper")
+	}).Info("Injected test wrapper")
+	return err
+}
+
+func InjectCodeToRunWrapper(opts *Options) error {
+	wrapperPath := GetPathToRunWrapper(opts)
+	content, err := ReadTextFile(wrapperPath)
+
+	opts.SourceCodeRun = strings.ReplaceAll(string(content), injectMarker, opts.SourceCodeOriginal)
+
+	Logger.WithFields(log.Fields{
+		"filepath": wrapperPath,
+	}).Info("Injected run wrapper")
 	return err
 }
 
@@ -172,13 +192,12 @@ func IsNewStatusValid(curStatus string, newStatus string) bool {
 	return false
 }
 
-
 type CourseForUser struct {
-	CourseId        string `json:"course_id"`
-	CourseType      string `json:"type"`
-	Status          string `json:"status,omitempty"`
-	Path            string `json:"-"`
-	Title           string `json:"title"`
+	CourseId    string `json:"course_id"`
+	CourseType  string `json:"type"`
+	Status      string `json:"status,omitempty"`
+	Path        string `json:"-"`
+	Title       string `json:"title"`
 	Icon        string `json:"icon"`
 	Description string `json:"description"`
 }
@@ -198,7 +217,7 @@ type TaskForUser struct {
 type ChapterContent struct {
 	ChapterForUser
 	Content string        `json:"content"`
-	Tasks       []TaskForUser `json:"tasks"`
+	Tasks   []TaskForUser `json:"tasks"`
 }
 
 type UserProgress struct {
