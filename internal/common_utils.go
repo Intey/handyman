@@ -193,6 +193,7 @@ type CourseForUser struct {
 	Title       string `json:"title"`
 	Icon        string `json:"icon"`
 	Description string `json:"description"`
+	Tags        string `json:"tags"`
 }
 
 type ChapterForUser struct {

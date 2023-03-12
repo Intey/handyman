@@ -53,8 +53,6 @@ curl -X POST \
 
 `/get_courses` - получение списка курсов с их характеристиками.
 ```bash
-curl -X POST   "http://localhost:8080/get_courses"
-
 curl -X POST   -d '{"status":"all"}'   "http://localhost:8080/get_courses?user_id=100"
 ```
 

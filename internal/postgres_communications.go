@@ -85,7 +85,7 @@ func UpdateTaskStatus(userId string, taskId string, isSolved bool, solutionText 
 
 func GetCourses() []CourseForUser {
 	query := `
-		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags
 		FROM courses
 	`
 
@@ -101,7 +101,7 @@ func GetCourses() []CourseForUser {
 	for rows.Next() {
 		var course CourseForUser
 
-		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title); err != nil {
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Tags); err != nil {
 			Logger.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Info("Couldn't parse row from courses selection")
@@ -116,7 +116,7 @@ func GetCourses() []CourseForUser {
 
 func GetCoursesForUser(userId string) []CourseForUser {
 	query := `
-		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title,
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags,
 		(CASE WHEN course_progress.status IS NULL THEN 'not_started' ELSE course_progress.status::varchar(40) END) as status 
 		FROM courses LEFT JOIN course_progress 
 		ON course_progress.course_id = courses.course_id AND course_progress.user_id=$1
@@ -135,7 +135,7 @@ func GetCoursesForUser(userId string) []CourseForUser {
 	for rows.Next() {
 		var course CourseForUser
 
-		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Status); err != nil {
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Tags, &course.Status); err != nil {
 			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
@@ -151,7 +151,7 @@ func GetCoursesForUser(userId string) []CourseForUser {
 
 func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
 	query := `
-		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags
 		FROM courses LEFT JOIN course_progress 
 		ON course_progress.course_id = courses.course_id AND course_progress.user_id=$1
 		WHERE status = $2
@@ -170,7 +170,7 @@ func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
 	for rows.Next() {
 		var course CourseForUser
 
-		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title); err != nil {
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Tags); err != nil {
 			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),

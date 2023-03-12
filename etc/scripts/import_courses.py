@@ -29,7 +29,10 @@ def import_courses(courses_dir: str, conn) -> List:
         title = course_id.capitalize()
         course_type = "free"
 
-        course_data = (course_id, path, title, course_type)
+        with open(os.path.join(path, "tags.json")) as file_tags:
+            tags = file_tags.read()
+
+        course_data = (course_id, path, title, course_type, tags)
         courses.append(course_data)
 
     course_ids = [c[0] for c in courses]
@@ -38,7 +41,7 @@ def import_courses(courses_dir: str, conn) -> List:
     insert = sql.SQL(
         """INSERT INTO courses VALUES {}
         ON CONFLICT (course_id) DO UPDATE
-        SET path_on_disk=EXCLUDED.path_on_disk, title=EXCLUDED.title, type=EXCLUDED.type"""
+        SET path_on_disk=EXCLUDED.path_on_disk, title=EXCLUDED.title, type=EXCLUDED.type, tags=EXCLUDED.tags"""
     ).format(sql.SQL(",").join(map(sql.Literal, courses)))
 
     run_cmd(conn, insert)
