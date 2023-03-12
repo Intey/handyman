@@ -133,6 +133,13 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(opts.userId) == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Couldn't get user_id",
+		})
+		return
+	}
+
 	isAllowed, err := IsUserAllowedToRunTask(opts)
 	if err != nil {
 		body, _ := json.Marshal(map[string]string{

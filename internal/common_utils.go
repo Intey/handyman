@@ -100,11 +100,6 @@ func GetContainerType(chapterId string) string {
 func GetUserId(r *http.Request) string {
 	urlParams := r.URL.Query()
 	return urlParams.Get("user_id")
-
-	// TODO: when Doorman is ready replace this with
-	// parsing of JWT token and extracting bearer:
-	// jwtToken := r.Header.Get("Authorization")
-	// parseUserFormJwt(jwtToken)
 }
 
 const rootCourses = "/data/courses/"

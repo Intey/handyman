@@ -517,10 +517,18 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 
 	opts, err := ParseOptions(r)
 
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Invalid request: %s", err),
+		})
+		w.Write(body)
+		return
+	}
+
 	var courses []CourseForUser
 
-	// Case when user is not logged
-	if err != nil {
+	// Case when user is not authorized
+	if len(opts.userId) == 0 {
 		courses = GetCourses()
 	} else {
 		if opts.Status == "all" {
@@ -559,9 +567,9 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(opts.Status) == 0 {
+	if len(opts.userId) == 0 || len(opts.Status) == 0 {
 		json.NewEncoder(w).Encode(map[string]string{
-			"error": "Course status is not set in request",
+			"error": "Required fields are not set in request",
 		})
 		return
 	}
@@ -747,6 +755,7 @@ func HandleGetChapters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// User is not authorized
 	if len(opts.userId) == 0 {
 		chapters := GetChapters(opts.CourseId)
 
