@@ -34,9 +34,6 @@ func ParseOptions(r *http.Request) (Options, error) {
 	}
 
 	opts.userId = GetUserId(r)
-	if len(opts.userId) == 0 {
-		return Options{}, errors.New("invalid user id")
-	}
 
 	if len(opts.TaskId) > 0 {
 		err := FillOptionsByTaskId(&opts)
@@ -103,11 +100,6 @@ func GetContainerType(chapterId string) string {
 func GetUserId(r *http.Request) string {
 	urlParams := r.URL.Query()
 	return urlParams.Get("user_id")
-
-	// TODO: when Doorman is ready replace this with
-	// parsing of JWT token and extracting bearer:
-	// jwtToken := r.Header.Get("Authorization")
-	// parseUserFormJwt(jwtToken)
 }
 
 const rootCourses = "/data/courses/"
@@ -201,6 +193,7 @@ type CourseForUser struct {
 	Title       string `json:"title"`
 	Icon        string `json:"icon"`
 	Description string `json:"description"`
+	Tags        string `json:"tags"`
 }
 
 type ChapterForUser struct {

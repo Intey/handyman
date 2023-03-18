@@ -85,7 +85,7 @@ func UpdateTaskStatus(userId string, taskId string, isSolved bool, solutionText 
 
 func GetCourses() []CourseForUser {
 	query := `
-		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags
 		FROM courses
 	`
 
@@ -101,7 +101,7 @@ func GetCourses() []CourseForUser {
 	for rows.Next() {
 		var course CourseForUser
 
-		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title); err != nil {
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Tags); err != nil {
 			Logger.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Info("Couldn't parse row from courses selection")
@@ -116,7 +116,7 @@ func GetCourses() []CourseForUser {
 
 func GetCoursesForUser(userId string) []CourseForUser {
 	query := `
-		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title,
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags,
 		(CASE WHEN course_progress.status IS NULL THEN 'not_started' ELSE course_progress.status::varchar(40) END) as status 
 		FROM courses LEFT JOIN course_progress 
 		ON course_progress.course_id = courses.course_id AND course_progress.user_id=$1
@@ -135,7 +135,7 @@ func GetCoursesForUser(userId string) []CourseForUser {
 	for rows.Next() {
 		var course CourseForUser
 
-		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Status); err != nil {
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Tags, &course.Status); err != nil {
 			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
@@ -151,7 +151,7 @@ func GetCoursesForUser(userId string) []CourseForUser {
 
 func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
 	query := `
-		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title
+		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags
 		FROM courses LEFT JOIN course_progress 
 		ON course_progress.course_id = courses.course_id AND course_progress.user_id=$1
 		WHERE status = $2
@@ -170,7 +170,7 @@ func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
 	for rows.Next() {
 		var course CourseForUser
 
-		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title); err != nil {
+		if err := rows.Scan(&course.CourseId, &course.Path, &course.CourseType, &course.Title, &course.Tags); err != nil {
 			Logger.WithFields(log.Fields{
 				"user_id": userId,
 				"error":   err.Error(),
@@ -184,6 +184,40 @@ func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
 	return courses
 }
 
+func GetChapters(courseId string) []ChapterForUser {
+	query := `
+		SELECT
+		chapters.chapter_id, chapters.title, 
+		'not_started' as status
+		FROM chapters
+		WHERE course_id=$1 ORDER BY chapters.chapter_id
+	`
+
+	rows, err := DB.Query(query, courseId)
+	if err != nil {
+		return []ChapterForUser{}
+	}
+
+	defer rows.Close()
+
+	chapters := []ChapterForUser{}
+
+	for rows.Next() {
+		var chapter ChapterForUser
+
+		if err := rows.Scan(&chapter.ChapterId, &chapter.Title, &chapter.Status); err != nil {
+			Logger.WithFields(log.Fields{
+				"error": err.Error(),
+			}).Error("Couldn't parse row from chapters selection")
+			return []ChapterForUser{}
+		}
+
+		chapters = append(chapters, chapter)
+	}
+
+	return chapters
+}
+
 func GetChaptersForUser(userId string, courseId string) []ChapterForUser {
 	query := `
 		SELECT
@@ -192,7 +226,7 @@ func GetChaptersForUser(userId string, courseId string) []ChapterForUser {
 		FROM chapters
 		LEFT JOIN chapter_progress ON
 		chapters.chapter_id = chapter_progress.chapter_id AND chapter_progress.user_id=$1
-		WHERE  course_id=$2 ORDER BY chapters.chapter_id
+		WHERE course_id=$2 ORDER BY chapters.chapter_id
 	`
 
 	rows, err := DB.Query(query, userId, courseId)
@@ -483,10 +517,18 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 
 	opts, err := ParseOptions(r)
 
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Invalid request: %s", err),
+		})
+		w.Write(body)
+		return
+	}
+
 	var courses []CourseForUser
 
-	// Case when user is not logged
-	if err != nil {
+	// Case when user is not authorized
+	if len(opts.userId) == 0 {
 		courses = GetCourses()
 	} else {
 		if opts.Status == "all" {
@@ -525,9 +567,9 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(opts.Status) == 0 {
+	if len(opts.userId) == 0 || len(opts.Status) == 0 {
 		json.NewEncoder(w).Encode(map[string]string{
-			"error": "Course status is not set in request",
+			"error": "Required fields are not set in request",
 		})
 		return
 	}
@@ -706,10 +748,22 @@ func HandleGetChapters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(opts.userId) == 0 || len(opts.CourseId) == 0 {
+	if len(opts.CourseId) == 0 {
 		json.NewEncoder(w).Encode(map[string]string{
-			"error": "Couldn't get user_id or course_id",
+			"error": "Couldn't get course_id in get_chapters",
 		})
+		return
+	}
+
+	// User is not authorized
+	if len(opts.userId) == 0 {
+		chapters := GetChapters(opts.CourseId)
+
+		Logger.WithFields(log.Fields{
+			"course_id": opts.CourseId,
+		}).Info("Successfully got chapters")
+
+		json.NewEncoder(w).Encode(chapters)
 		return
 	}
 

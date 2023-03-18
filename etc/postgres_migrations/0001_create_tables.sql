@@ -18,7 +18,8 @@ CREATE TABLE courses (
     course_id varchar NOT NULL PRIMARY KEY,
     path_on_disk varchar NOT NULL,
     title varchar NOT NULL,
-    type course_type default 'free' NOT NULL
+    type course_type default 'free' NOT NULL,
+    tags jsonb NOT NULL
 );
 ALTER TABLE courses OWNER TO senjun;
 

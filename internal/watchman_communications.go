@@ -60,20 +60,14 @@ func extractRunTaskOptions(r *http.Request) (Options, error) {
 	return opts, nil
 }
 
-func genTaskTmpId(opts Options) string {
-	return fmt.Sprintf("%s_%s_%d", opts.userId, opts.TaskId, time.Now().UnixNano())
-}
-
 func communicateWatchman(opts Options, c chan RunTaskResult) {
 	defer close(c)
 	res := new(RunTaskResult)
 
-	taskTmpId := genTaskTmpId(opts)
 	postBody, _ := json.Marshal(map[string]string{
 		"container_type": opts.containerType,
 		"source_test":    opts.SourceCodeTest,
 		"source_run":     opts.SourceCodeRun,
-		"task_id":        taskTmpId,
 	})
 	reqBody := bytes.NewBuffer(postBody)
 
@@ -136,6 +130,13 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 			"error": fmt.Sprintf("Invalid request: %s", err),
 		})
 		w.Write(body)
+		return
+	}
+
+	if len(opts.userId) == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Couldn't get user_id",
+		})
 		return
 	}
 
