@@ -191,9 +191,16 @@ type CourseForUser struct {
 	Status      string `json:"status,omitempty"`
 	Path        string `json:"-"`
 	Title       string `json:"title"`
-	Icon        string `json:"icon"`
 	Description string `json:"description"`
 	Tags        string `json:"tags"`
+}
+
+type CourseStatus struct {
+	CourseId         string `json:"course_id"`
+	Title            string `json:"title"`
+	TotalChapters    int    `json:"total_chapters"`
+	FinishedChapters int    `json:"finished_chapters"`
+	Status           string `json:"status,omitempty"`
 }
 
 type ChapterForUser struct {
