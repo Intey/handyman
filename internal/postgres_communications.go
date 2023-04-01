@@ -601,14 +601,27 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 
 	// Case when user is not authorized
 	if len(opts.userId) == 0 {
+		Logger.WithFields(log.Fields{
+			"status": opts.Status,
+		}).Info("Getting courses for not authorized user")
+
 		courses = GetCourses()
 	} else {
+		Logger.WithFields(log.Fields{
+			"status":  opts.Status,
+			"user_id": opts.userId,
+		}).Info("Getting courses for user")
+
 		if opts.Status == "all" {
 			courses = GetCoursesForUser(opts.userId)
 		} else {
 			courses = GetCoursesForUserByStatus(opts.userId, opts.Status)
 		}
 	}
+
+	Logger.WithFields(log.Fields{
+		"courses_len": len(courses),
+	}).Info("Got courses from db")
 
 	for i := 0; i < len(courses); i++ {
 		descr, _ := ReadTextFile(filepath.Join(courses[i].Path, "description.md"))
@@ -618,6 +631,7 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 	Logger.WithFields(log.Fields{
 		"user_id": opts.userId,
 		"status":  opts.Status,
+		"courses": courses,
 	}).Info("Successfully got courses")
 
 	json.NewEncoder(w).Encode(courses)
@@ -830,7 +844,7 @@ func HandleGetChapters(w http.ResponseWriter, r *http.Request) {
 
 		Logger.WithFields(log.Fields{
 			"course_id": opts.CourseId,
-		}).Info("Successfully got chapters")
+		}).Info("Successfully got chapters for not authorized user")
 
 		json.NewEncoder(w).Encode(chapters)
 		return
