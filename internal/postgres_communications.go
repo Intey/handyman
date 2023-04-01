@@ -553,6 +553,36 @@ func GetCourseStatuses(userId string) []CourseStatus {
 	return courseStatuses
 }
 
+func GetTaskForUser(userId string, taskId string) (TaskForUser, error) {
+	query := `
+	select status, solution_text from task_progress where user_id = $1 and task_id = $2
+	`
+
+	rows, err := DB.Query(query, userId, taskId)
+	if err != nil {
+		return TaskForUser{}, err
+	}
+
+	var task TaskForUser
+	task.TaskId = taskId
+	task.Status = "not_started"
+
+	defer rows.Close()
+
+	for rows.Next() {
+		if err := rows.Scan(&task.Status, &task.UserCode); err != nil {
+			Logger.WithFields(log.Fields{
+				"user_id": userId,
+				"task_id": taskId,
+				"error":   err.Error(),
+			}).Info("Couldn't parse row from task_progress selection for user")
+			return TaskForUser{}, err
+		}
+	}
+
+	return task, nil
+}
+
 func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-type", "application/json")
@@ -586,8 +616,9 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	Logger.WithFields(log.Fields{
-		"user_id": opts.userId,
-		"status":  opts.Status,
+		"user_id":     opts.userId,
+		"status":      opts.Status,
+		"courses_len": len(courses),
 	}).Info("Successfully got courses")
 
 	json.NewEncoder(w).Encode(courses)
@@ -800,7 +831,7 @@ func HandleGetChapters(w http.ResponseWriter, r *http.Request) {
 
 		Logger.WithFields(log.Fields{
 			"course_id": opts.CourseId,
-		}).Info("Successfully got chapters")
+		}).Info("Successfully got chapters for not authorized user")
 
 		json.NewEncoder(w).Encode(chapters)
 		return
@@ -892,7 +923,7 @@ func HandleGetProgress(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(userProgress.NotCompletedTaskIds) > 0 {
+	if len(userProgress.NotCompletedTaskIds) > 0 && chapterStatus != "completed" {
 		userProgress.StatusOnChapter = "chapter_not_completed"
 	} else {
 		userProgress.StatusOnChapter = "chapter_completed"
@@ -943,6 +974,44 @@ func HandleCoursesStats(w http.ResponseWriter, r *http.Request) {
 
 	courseStatuses := GetCourseStatuses(opts.userId)
 	json.NewEncoder(w).Encode(courseStatuses)
+}
+
+func HandleGetTask(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-type", "application/json")
+
+	opts, err := ParseOptions(r)
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Invalid request: %s", err),
+		})
+		w.Write(body)
+		return
+	}
+
+	if len(opts.userId) == 0 || len(opts.TaskId) == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Couldn't get user_id or task_id",
+		})
+		return
+	}
+
+	task, err := GetTaskForUser(opts.userId, opts.TaskId)
+	if err != nil {
+		Logger.WithFields(log.Fields{
+			"user_id": opts.userId,
+			"task_id": opts.TaskId,
+			"error":   err.Error(),
+		}).Error("Couldn't get task details")
+
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Couldn't get task details for: %s", opts.TaskId),
+		})
+		w.Write(body)
+		return
+	}
+
+	json.NewEncoder(w).Encode(task)
 }
 
 func HandleGetActiveChapter(w http.ResponseWriter, r *http.Request) {
