@@ -1,6 +1,6 @@
 set -e 
 
-version="0.1.5"
+version="0.1.8"
 
 fpm \
   -s dir -t rpm \
@@ -9,5 +9,5 @@ fpm \
   --license agpl3 \
   --version $version \
   --architecture all \
-  --description "Go!" \
+  --description "Middleware between user & watchman" \
   handyman/main=/bin/handyman ../accomodation/handyman.service=/etc/systemd/system/handyman.service

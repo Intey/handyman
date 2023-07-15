@@ -151,36 +151,6 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isAllowed, err := IsUserAllowedToRunTask(opts)
-	if err != nil {
-		body, _ := json.Marshal(map[string]string{
-			"error": fmt.Sprintf("Couldn't check user permissions on this chapter: %s", err),
-		})
-		w.Write(body)
-
-		Logger.WithFields(log.Fields{
-			"user_id":    opts.userId,
-			"task_id":    opts.TaskId,
-			"chapter_id": opts.ChapterId,
-			"error":      err.Error(),
-		}).Warning("/run_task: couldn't get user permissions on chapter")
-		return
-	}
-
-	if !isAllowed {
-		body, _ := json.Marshal(map[string]string{
-			"error": "User doesn't have permissions on this chapter",
-		})
-		w.Write(body)
-
-		Logger.WithFields(log.Fields{
-			"user_id":    opts.userId,
-			"task_id":    opts.TaskId,
-			"chapter_id": opts.ChapterId,
-		}).Warning("/run_task: user doesn't have permissions on chapter")
-		return
-	}
-
 	err = InjectCodeToTestWrapper(&opts)
 
 	if err != nil {
@@ -235,9 +205,8 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WP.Submit(func() {
-		UpdateTaskStatus(opts.userId, opts.TaskId, res.Status == 0 && res.TestsStatus == 0, opts.SourceCodeOriginal)
-	})
+	UpdateStatus(opts.userId, opts.TaskId, opts.ChapterId, opts.CourseId,
+		res.Status == 0 && res.TestsStatus == 0, opts.SourceCodeOriginal)
 
 	Logger.WithFields(log.Fields{
 		"user_id":           opts.userId,
