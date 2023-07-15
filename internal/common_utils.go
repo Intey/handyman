@@ -188,7 +188,7 @@ func IsNewStatusValid(curStatus string, newStatus string) bool {
 		return true
 	}
 
-	if (len(curStatus) == 0 || curStatus == "not_started") && newStatus == "in_progress" {
+	if (len(curStatus) == 0 || curStatus == "not_started") && (newStatus == "in_progress" || newStatus == "completed") {
 		return true
 	}
 
@@ -218,9 +218,10 @@ type CourseStatus struct {
 }
 
 type ChapterForUser struct {
-	ChapterId string `json:"chapter_id"`
-	Status    string `json:"status"`
-	Title     string `json:"title"`
+	ChapterId     string `json:"chapter_id"`
+	Status        string `json:"status"`
+	Title         string `json:"title"`
+	NextChapterId string `json:"next_chapter_id,omitempty"`
 }
 
 type TaskForUser struct {
