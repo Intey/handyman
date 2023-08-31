@@ -32,14 +32,24 @@ type Options struct {
 	ChapterId          string `json:"chapter_id,omitempty"`
 	TaskId             string `json:"task_id,omitempty"`
 	SourceCodeOriginal string `json:"solution_text,omitempty"`
-	SourceCodeRun      string `json:"text_for_exed,omitempty"`
-	SourceCodeTest     string `json:"text_for_test",omitempty`
-	Status             string `json:"status,omitempty"`
-	// Must be extracted later not from HTTP POST body, but
-	// from header with JWT access token
+	SourceCodeRun      string `json:"source_run"`
+	SourceCodeTest     string `json:"source_test"`
+
+	Status string `json:"status,omitempty"`
+
+	// Filled based on the chapter id prefix
+	containerType string `json:"container_type"`
+
 	userId string
-	// May be filled later based on the chapter id prefix
-	containerType string
+
+	ColorOutput bool `json:"color_output,omitempty"`
+}
+
+type WatchmanOptions struct {
+	SourceCodeRun  string   `json:"source_run"`
+	SourceCodeTest string   `json:"source_test"`
+	ContainerType  string   `json:"container_type"`
+	CmdLineArgs    []string `json:"cmd_line_args"`
 }
 
 func ParseOptions(r *http.Request) (Options, error) {

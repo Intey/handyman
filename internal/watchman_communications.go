@@ -64,11 +64,29 @@ func communicateWatchman(opts Options, c chan RunTaskResult) {
 	defer close(c)
 	res := new(RunTaskResult)
 
-	postBody, _ := json.Marshal(map[string]string{
-		"container_type": opts.containerType,
-		"source_test":    opts.SourceCodeTest,
-		"source_run":     opts.SourceCodeRun,
-	})
+	var watchmanOpts WatchmanOptions
+	watchmanOpts.ContainerType = opts.containerType
+	watchmanOpts.SourceCodeRun = opts.SourceCodeRun
+	watchmanOpts.SourceCodeTest = opts.SourceCodeTest
+
+	colorArg := "-c always"
+	if !opts.ColorOutput {
+		colorArg = "-c never"
+	}
+
+	watchmanOpts.CmdLineArgs = append(watchmanOpts.CmdLineArgs, colorArg)
+
+	postBody, err := json.Marshal(watchmanOpts)
+	if err != nil {
+		Logger.WithFields(log.Fields{
+			"Error": err},
+		).Error("Couldn't json.marshal opts.RutTaskOptions for watchman")
+
+		res.err = err
+		c <- *res
+		return
+	}
+
 	reqBody := bytes.NewBuffer(postBody)
 
 	client := http.Client{
@@ -138,6 +156,12 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		}).Warning("/run_task: couldn't parse request")
 		return
 	}
+
+	Logger.WithFields(log.Fields{
+		"user_id":      opts.userId,
+		"task_id":      opts.TaskId,
+		"color_output": opts.ColorOutput,
+	}).Info("/run_task: parsed options")
 
 	if len(opts.userId) == 0 {
 		json.NewEncoder(w).Encode(map[string]string{
