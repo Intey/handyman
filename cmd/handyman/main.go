@@ -51,7 +51,7 @@ func main() {
 	r.HandleFunc("/run_task", internal.HandleRunTask)
 	r.HandleFunc("/get_progress", internal.HandleGetProgress)
 	r.HandleFunc("/get_chapter", internal.HandleGetChapter)
-
+	r.HandleFunc("/get_course_info", internal.HandleGetCourseInfo)
 	r.HandleFunc("/get_chapters", internal.HandleGetChapters)
 
 	r.HandleFunc("/get_active_chapter", internal.HandleGetActiveChapter)

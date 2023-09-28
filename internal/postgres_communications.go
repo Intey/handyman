@@ -147,6 +147,17 @@ func GetCourses() []CourseForUser {
 	return courses
 }
 
+func GetCourseInfo(courseId string) (string, error) {
+	query := `
+		SELECT tags FROM courses where course_id=$1
+	`
+
+	var tags string
+	row := DB.QueryRow(query, courseId)
+	err := row.Scan(&tags)
+	return tags, err
+}
+
 func GetCoursesForUser(userId string) []CourseForUser {
 	query := `
 		SELECT courses.course_id, courses.path_on_disk, courses.type, courses.title, courses.tags,
@@ -180,12 +191,6 @@ func GetCoursesForUser(userId string) []CourseForUser {
 	}
 
 	return courses
-}
-
-func GetCourseStatsForUser(userId string, courseId string) CourseStatus {
-	var courseStatus CourseStatus
-	return courseStatus
-
 }
 
 func GetCoursesForUserByStatus(userId string, status string) []CourseForUser {
@@ -1228,6 +1233,55 @@ func HandleGetChapters(w http.ResponseWriter, r *http.Request) {
 	}).Info("/get_chapters: completed")
 
 	json.NewEncoder(w).Encode(chapters)
+}
+
+func HandleGetCourseInfo(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-type", "application/json")
+
+	opts, err := ParseOptions(r)
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": fmt.Sprintf("Invalid request: %s", err),
+		})
+		w.Write(body)
+
+		Logger.WithFields(log.Fields{
+			"course_id": opts.CourseId,
+			"error":     err.Error(),
+		}).Warning("/get_course_info: couldn't parse request")
+		return
+	}
+
+	if len(opts.CourseId) == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Couldn't get required request params",
+		})
+
+		Logger.WithFields(log.Fields{
+			"course_id": opts.CourseId,
+		}).Warning("/get_course_info: required fields not set in request")
+		return
+	}
+
+	tags_str, err := GetCourseInfo(opts.CourseId)
+	if err != nil {
+		body, _ := json.Marshal(map[string]string{
+			"error": "Couldn't get course info",
+		})
+		w.Write(body)
+
+		Logger.WithFields(log.Fields{
+			"course_id": opts.CourseId,
+			"error":     err.Error(),
+		}).Warning("/get_course_info: couldn't get course info")
+		return
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"tags": tags_str,
+	})
+	w.Write(body)
 }
 
 func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
