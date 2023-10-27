@@ -144,11 +144,15 @@ func communicateWatchman(opts Options, c chan RunTaskResult) {
 }
 
 func HandleRunTask(w http.ResponseWriter, r *http.Request) {
+	countRunTaskTotal.Inc()
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-type", "application/json")
 
 	opts, err := extractRunTaskOptions(r)
 	if err != nil {
+		countRunTaskErrClient.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Invalid request: %s", err),
 		})
@@ -159,6 +163,7 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 			"task_id": opts.TaskId,
 			"error":   err.Error(),
 		}).Warning("/run_task: couldn't parse request")
+
 		return
 	}
 
@@ -173,6 +178,8 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 	}).Info("/run_task: parsed options")
 
 	if len(opts.userId) == 0 {
+		countRunTaskErrClient.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "Couldn't get user_id",
 		})
@@ -187,6 +194,8 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 	err = InjectCodeToTestWrapper(&opts)
 
 	if err != nil {
+		countRunTaskErrServer.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": "Couldn't prepare tests for wrapper task runner",
 		})
@@ -205,6 +214,8 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 	err = InjectCodeToRunWrapper(&opts)
 
 	if err != nil {
+		countRunTaskErrServer.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": "Couldn't prepare run wrapper for task runner",
 		})
@@ -225,6 +236,8 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 	res := <-c
 
 	if res.err != nil {
+		countRunTaskErrServer.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Couldn't communicate with tasks runner: %s", res.err),
 		})
@@ -238,8 +251,12 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	UpdateStatus(opts.userId, opts.TaskId, opts.ChapterId, opts.CourseId,
-		res.Status == 0 && res.TestsStatus == 0, opts.SourceCodeOriginal)
+	if UpdateStatus(opts.userId, opts.TaskId, opts.ChapterId, opts.CourseId,
+		res.Status == 0 && res.TestsStatus == 0, opts.SourceCodeOriginal) {
+		countRunTaskOk.Inc()
+	} else {
+		countRunTaskErrServer.Inc()
+	}
 
 	Logger.WithFields(log.Fields{
 		"user_id":           opts.userId,

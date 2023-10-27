@@ -10,6 +10,8 @@ import (
 
 	"github.com/gammazero/workerpool"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,6 +24,113 @@ var WP *workerpool.WorkerPool
 const connStr = "postgresql://senjun:some_password@127.0.0.1:5432/senjun?sslmode=disable"
 
 var Logger *log.Logger
+
+// --------------- METRICS
+
+// /run_task
+var countRunTaskTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_run_task_total",
+})
+
+var countRunTaskOk = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_run_task_ok",
+})
+
+var countRunTaskErrClient = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_run_task_errors_client",
+})
+
+var countRunTaskErrServer = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_run_task_errors_server",
+})
+
+// /get_courses
+var countGetCoursesTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_courses_total",
+})
+
+var countGetCoursesAnonym = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_courses_anonym",
+})
+
+var countGetCoursesAuthorized = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_courses_authorized",
+})
+
+var countGetCoursesErrClient = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_courses_err_client",
+})
+
+var countGetCoursesErrServer = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_courses_err_server",
+})
+
+// update_course_progress
+var countUpdateCourseProgressTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_total",
+})
+
+var countUpdateCourseProgressServerError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_err_server",
+})
+
+var countUpdateCourseProgressStatusError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_err_status",
+})
+
+var countUpdateCourseProgressClientError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_err_client",
+})
+
+var countUpdateCourseProgressOk = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_ok",
+})
+
+var countUpdateCourseProgressOkCompleted = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_ok_completed",
+})
+
+// /update_chapter_progress
+var countUpdateChapterProgressTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_total",
+})
+
+var countUpdateChapterProgressServerError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_err_server",
+})
+
+var countUpdateChapterProgressStatusError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_err_status",
+})
+
+var countUpdateChapterProgressClientError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_err_client",
+})
+
+var countUpdateChapterProgressOk = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_ok",
+})
+
+var countUpdateChapterProgressOkCompleted = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_ok_completed",
+})
+
+// /get_chapter
+var countGetChapterTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_chapter_total",
+})
+
+var countGetChapterServerError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_chapter_err_server",
+})
+
+var countGetChapterClientError = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_chapter_err_client",
+})
+
+var countGetChapterOk = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_chapter_ok",
+})
 
 func ConnectDb() *sql.DB {
 	db, err := sql.Open("postgres", connStr)
@@ -72,7 +181,7 @@ func TryStartCourse(userId string, courseId string) {
 	}
 }
 
-func UpdateStatus(userId string, taskId string, chapterId string, courseId string, isSolved bool, solutionText string) {
+func UpdateStatus(userId string, taskId string, chapterId string, courseId string, isSolved bool, solutionText string) bool {
 	taskStatus := getEduMaterialStatus(isSolved)
 	const attemptsCount = 1
 
@@ -93,7 +202,7 @@ func UpdateStatus(userId string, taskId string, chapterId string, courseId strin
 			"task_id": taskId,
 			"error":   err.Error(),
 		}).Error("/run_task [worker pool] update task status: couldn't update task status for user")
-		return
+		return false
 	}
 
 	err = UpdateChapterStatus(userId, chapterId, "in_progress")
@@ -104,7 +213,7 @@ func UpdateStatus(userId string, taskId string, chapterId string, courseId strin
 			"chapter_id": chapterId,
 			"error":      err.Error(),
 		}).Error("/run_task [worker pool] update chapter status: couldn't update chapter status for user")
-		return
+		return false
 	}
 
 	TryStartCourse(userId, courseId)
@@ -114,6 +223,8 @@ func UpdateStatus(userId string, taskId string, chapterId string, courseId strin
 		"task_id": taskId,
 		"status":  taskStatus,
 	}).Info("/run_task [worker pool] update task status: completed")
+
+	return true
 }
 
 func GetCourses() []CourseForUser {
@@ -888,12 +999,16 @@ func AreAllTasksInCourseCompleted(userId string, courseId string) (bool, error) 
 }
 
 func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
+	countGetCoursesTotal.Inc()
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-type", "application/json")
 
 	opts, err := ParseOptions(r)
 
 	if err != nil {
+		countGetCoursesErrClient.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Invalid request: %s", err),
 		})
@@ -911,8 +1026,10 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 
 	// Case when user is not authorized
 	if len(opts.userId) == 0 {
+		countGetCoursesAnonym.Inc()
 		courses = GetCourses()
 	} else {
+		countGetCoursesAuthorized.Inc()
 		if opts.Status == "all" {
 			courses = GetCoursesForUser(opts.userId)
 		} else {
@@ -925,6 +1042,10 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 		courses[i].Description = descr
 	}
 
+	if len(courses) == 0 {
+		countGetCoursesErrServer.Inc()
+	}
+
 	Logger.WithFields(log.Fields{
 		"user_id":               opts.userId,
 		"status":                opts.Status,
@@ -935,11 +1056,15 @@ func HandleGetCourses(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
+	countUpdateCourseProgressTotal.Inc()
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-type", "application/json")
 
 	opts, err := ParseOptions(r)
 	if err != nil {
+		countUpdateCourseProgressClientError.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Invalid request: %s", err),
 		})
@@ -955,6 +1080,8 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(opts.userId) == 0 || len(opts.Status) == 0 || len(opts.CourseId) == 0 {
+		countUpdateCourseProgressClientError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "Required fields are not set in request",
 		})
@@ -970,6 +1097,8 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 
 	curStatus, err := GetCourseProgressForUser(opts.CourseId, opts.userId)
 	if err != nil {
+		countUpdateCourseProgressServerError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "Couldn't get user progress on course",
 		})
@@ -984,6 +1113,8 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsNewStatusValid(curStatus, opts.Status) {
+		countUpdateCourseProgressStatusError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error":          "Couldn't change status",
 			"current_status": curStatus,
@@ -1001,7 +1132,10 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 
 	if opts.Status == "completed" {
 		isCourseCompleted, _ := AreAllTasksInCourseCompleted(opts.userId, opts.CourseId)
-		if !isCourseCompleted {
+
+		if isCourseCompleted {
+			countUpdateCourseProgressOkCompleted.Inc()
+		} else {
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": "Not all tasks are solved",
 			})
@@ -1018,6 +1152,8 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 
 	err = UpdateCourseProgressForUser(opts.CourseId, opts.Status, opts.userId)
 	if err != nil {
+		countUpdateCourseProgressServerError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "Couldn't update user progress on course",
 		})
@@ -1039,6 +1175,8 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 		"new_status": opts.Status,
 	}).Info("/update_course_progress: completed")
 
+	countUpdateCourseProgressOk.Inc()
+
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
 	})
@@ -1058,11 +1196,15 @@ func UpdateChapterStatus(userId string, chapterId string, status string) error {
 }
 
 func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
+	countUpdateChapterProgressTotal.Inc()
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-type", "application/json")
 
 	opts, err := ParseOptions(r)
 	if err != nil {
+		countUpdateChapterProgressClientError.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Invalid request: %s", err),
 		})
@@ -1078,6 +1220,8 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(opts.userId) == 0 || len(opts.ChapterId) == 0 || len(opts.Status) == 0 {
+		countUpdateChapterProgressClientError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "Couldn't get user_id, chapter_id or status",
 		})
@@ -1093,6 +1237,8 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 	curStatus, err := GetChapterProgress(opts.userId, opts.ChapterId)
 	if err != nil {
 		if err != sql.ErrNoRows {
+			countUpdateChapterProgressServerError.Inc()
+
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": "Couldn't get user progress on chapter",
 			})
@@ -1109,6 +1255,8 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !IsNewStatusValid(curStatus, opts.Status) {
+		countUpdateChapterProgressStatusError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error":          "Couldn't change status",
 			"current_status": curStatus,
@@ -1150,6 +1298,8 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 	err = UpdateChapterStatus(opts.userId, opts.ChapterId, opts.Status)
 
 	if err != nil {
+		countUpdateChapterProgressServerError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error":      "Couldn't update chapter status for user",
 			"chapter_id": opts.ChapterId,
@@ -1167,6 +1317,12 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	TryStartCourse(opts.userId, opts.CourseId)
+
+	if opts.Status == "completed" {
+		countUpdateChapterProgressOkCompleted.Inc()
+	}
+
+	countUpdateChapterProgressOk.Inc()
 
 	Logger.WithFields(log.Fields{
 		"user_id":    opts.userId,
@@ -1285,11 +1441,15 @@ func HandleGetCourseInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
+	countGetChapterTotal.Inc()
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-type", "application/json")
 
 	opts, err := ParseOptions(r)
 	if err != nil {
+		countGetChapterClientError.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Invalid request: %s", err),
 		})
@@ -1305,6 +1465,8 @@ func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(opts.userId) == 0 || len(opts.CourseId) == 0 && len(opts.ChapterId) == 0 {
+		countGetChapterClientError.Inc()
+
 		json.NewEncoder(w).Encode(map[string]string{
 			"error": "Couldn't get required request params",
 		})
@@ -1320,6 +1482,8 @@ func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
 	chapter, err := GetChapterForUser(opts)
 
 	if err != nil {
+		countGetChapterServerError.Inc()
+
 		body, _ := json.Marshal(map[string]string{
 			"error": fmt.Sprintf("Couldn't get %s chapter for user %s (chapter %s): %s",
 				opts.CourseId, opts.userId, opts.ChapterId, err),
@@ -1338,6 +1502,7 @@ func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
 	chapter.NextChapterId, _ = GetNextChapterId(opts.CourseId, opts.ChapterId)
 	chapter.CourseStatus, _ = GetCourseProgressForUser(opts.CourseId, opts.userId)
 
+	countGetChapterOk.Inc()
 	Logger.WithFields(log.Fields{
 		"user_id":         opts.userId,
 		"course_id":       opts.CourseId,

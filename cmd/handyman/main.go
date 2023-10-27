@@ -8,6 +8,7 @@ import (
 
 	"github.com/gammazero/workerpool"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 	"senjun.ru/handyman/internal"
@@ -61,6 +62,8 @@ func main() {
 	// APIs for syncing telegram bot account and site account:
 	r.HandleFunc("/merge_users", internal.HandleMergeUsers)
 	r.HandleFunc("/split_users", internal.HandleSplitUsers)
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	srv := &http.Server{
 		Handler:      r,
