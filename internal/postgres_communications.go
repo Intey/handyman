@@ -90,9 +90,17 @@ var countUpdateCourseProgressOkCompleted = promauto.NewCounter(prometheus.Counte
 	Name: "handyman_update_course_progress_ok_completed",
 })
 
+var countUpdateCourseProgressNoAction = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_course_progress_no_action",
+})
+
 // /update_chapter_progress
 var countUpdateChapterProgressTotal = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "handyman_update_chapter_progress_total",
+})
+
+var countUpdateChapterProgressNoAction = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_update_chapter_progress_no_action",
 })
 
 var countUpdateChapterProgressServerError = promauto.NewCounter(prometheus.CounterOpts{
@@ -118,6 +126,11 @@ var countUpdateChapterProgressOkCompleted = promauto.NewCounter(prometheus.Count
 // /get_chapter
 var countGetChapterTotal = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "handyman_get_chapter_total",
+})
+
+// /get_chapter
+var countGetChapterAnonymous = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "handyman_get_chapter_anonymous",
 })
 
 var countGetChapterServerError = promauto.NewCounter(prometheus.CounterOpts{
@@ -1150,7 +1163,9 @@ func HandleUpdateCourseProgress(w http.ResponseWriter, r *http.Request) {
 				"course_id":      opts.CourseId,
 				"current_status": curStatus,
 				"new_status":     opts.Status,
-			}).Info("/update_course_progress: no_action course status transmission for user")
+			}).Info("/update_course_progress: no action")
+
+			countUpdateCourseProgressNoAction.Inc()
 			return
 
 		}
@@ -1313,7 +1328,7 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 				"status":            opts.Status,
 				"action":            "not_changed",
 				"return_chapter_id": ret_chapter_id,
-			}).Info("/update_chapter_progress: do nothing")
+			}).Info("/update_chapter_progress: no action")
 
 			json.NewEncoder(w).Encode(map[string]string{
 				"status":     "no_action",
@@ -1321,6 +1336,7 @@ func HandleUpdateChapterProgress(w http.ResponseWriter, r *http.Request) {
 				"course_id":  opts.CourseId,
 			})
 
+			countUpdateChapterProgressNoAction.Inc()
 			return
 		}
 
@@ -1570,6 +1586,7 @@ func HandleGetChapter(w http.ResponseWriter, r *http.Request) {
 
 	chapter.NextChapterId, _ = GetNextChapterId(opts.CourseId, opts.ChapterId)
 	if len(opts.userId) == 0 {
+		countGetChapterAnonymous.Inc()
 		chapter.CourseStatus = "not_started"
 	} else {
 		chapter.CourseStatus, _ = GetCourseProgressForUser(opts.CourseId, opts.userId)
