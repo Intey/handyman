@@ -126,6 +126,10 @@ func GetContainerType(chapterId string) string {
 		return "golang"
 	}
 
+	if strings.HasPrefix(chapterId, "haskell") {
+		return "haskell"
+	}
+
 	return ""
 }
 
