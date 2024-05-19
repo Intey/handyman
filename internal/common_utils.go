@@ -161,8 +161,9 @@ func GetPathToRunWrapper(opts *Options) string {
 	return filepath.Join(rootCourses, opts.CourseId, "wrapper_run_fallback")
 }
 
-func GetPathToChapterText(courseId string, chapterId string) (string, error) {
-	return filepath.Join(rootCourses, courseId, chapterId, "text.md"), nil
+func GetPathToChapterText(courseId string, chapterId string) (string, string) {
+	return filepath.Join(rootCourses, courseId, chapterId, "text.md"),
+		filepath.Join(rootCourses, courseId, chapterId, "keywords.md")
 }
 
 func ReadTextFile(path string) (string, error) {
@@ -264,8 +265,9 @@ type TaskForUser struct {
 
 type ChapterContent struct {
 	ChapterForUser
-	Content string        `json:"content"`
-	Tasks   []TaskForUser `json:"tasks"`
+	Content  string        `json:"content"`
+	Tasks    []TaskForUser `json:"tasks"`
+	Keywords string        `json:"keywords,omitempty"`
 }
 
 type UserProgress struct {

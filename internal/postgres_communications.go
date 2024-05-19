@@ -537,13 +537,13 @@ func GetChapterForUser(opts Options) (ChapterContent, error) {
 	chapterContent.Status = status
 	chapterContent.Title = title
 
-	contentPath, err := GetPathToChapterText(opts.CourseId, chapterContent.ChapterId)
-	if err != nil {
-		return ChapterContent{}, err
-	}
+	contentPath, keywordsPath := GetPathToChapterText(opts.CourseId, chapterContent.ChapterId)
 
 	chapterText, _ := ReadTextFile(contentPath)
-
+	keywordsText, err := ReadTextFile(keywordsPath)
+	if err == nil {
+		chapterContent.Keywords = keywordsText
+	}
 	chapterContent.Content = chapterText
 	chapterContent.Tasks = GetTasks(chapterContent.ChapterId, opts.userId)
 
