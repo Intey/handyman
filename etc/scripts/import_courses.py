@@ -109,6 +109,9 @@ def import_tasks_for_chapter(chapter_id: str, tasks_dir: str, conn) -> None:
 
     logging.info(f"Chapter {chapter_id}. Found {len(tasks)} tasks")
 
+    if len(tasks) == 0:
+        return
+
     insert = sql.SQL(
         """INSERT INTO tasks VALUES {}
         ON CONFLICT (task_id) DO NOTHING"""
