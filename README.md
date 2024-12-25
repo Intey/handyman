@@ -53,6 +53,12 @@ curl -X POST \
 
 ```bash
 curl -X POST \
+  -d '{"task_id":"cpp_chapter_0020_task_0020", "solution_text":"IHRydWUgIA==", "task_type":"plain_text"}' \
+  "http://localhost:8080/run_task?user_id=1"
+```
+  
+```bash
+curl -X POST \
   -d '{"task_id":"rust_chapter_0020_task_0010", "solution_text":"bGV0IG11dCBtID0gMzsKbSA9IG0gKyAyOwpwcmludGxuISgibSA9IHt9IiwgbSk7CmFzc2VydCEobSA9PSA1KTsK", "color_output": false}' \
   "http://localhost:8080/run_task?user_id=1"
 ```

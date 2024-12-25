@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const timeoutReplyFromWatchman = 30 * time.Second
+const timeoutReplyFromWatchman = 45 * time.Second
 const addrWatchman = "http://127.0.0.1:8000/check"
 const addrWatchmanPlayground = "http://127.0.0.1:8000/playground"
 const addrWatchmanPractice = "http://127.0.0.1:8000/practice"
@@ -94,36 +94,38 @@ func extractOptionsRunTask(r *http.Request) (Options, error) {
 }
 
 func sendRequestToWatchman(api string, postBody *[]byte) ([]byte, error) {
-	reqBody := bytes.NewBuffer(*postBody)
-
-	client := http.Client{
+	client := &http.Client{
 		Timeout: timeoutReplyFromWatchman,
 	}
-
-	resp, err := client.Post(api, "application/json", reqBody)
-
+	req, err := http.NewRequest("POST", api, bytes.NewBuffer(*postBody))
 	if err != nil {
 		Logger.WithFields(log.Fields{
 			"api":   api,
 			"error": err,
 		},
-		).Error("Couldn't send request to watchman")
+		).Error("Couldn't create request for watchman")
+
+		return []byte{}, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	//req.Header.Set("Connection", "close")
+	//req.Close = true
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Logger.WithFields(log.Fields{
+			"api":   api,
+			"error": err,
+		},
+		).Error("Client.Do() error with watchman")
 
 		return []byte{}, err
 	}
 
 	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		Logger.WithFields(log.Fields{
-			"api":       api,
-			"error":     err,
-			"http_code": resp.StatusCode,
-		},
-		).Error("Watchman returned error HTTP code")
-
-		return []byte{}, err
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -131,7 +133,7 @@ func sendRequestToWatchman(api string, postBody *[]byte) ([]byte, error) {
 			"api":   api,
 			"error": err,
 		},
-		).Error("Couldont' read watchman response body")
+		).Error("Couldnt' read watchman response body")
 
 		return []byte{}, err
 	}
@@ -339,7 +341,7 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 			"user_id": opts.userId,
 			"task_id": opts.TaskId,
 			"error":   err.Error(),
-		}).Error("/run_task: error communicating with watchman")
+		}).Error("/run_task: error communicating with watchman (getRequestBodyRunTask)")
 		return
 	}
 
@@ -354,10 +356,11 @@ func HandleRunTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(body)
 
 		Logger.WithFields(log.Fields{
-			"user_id": opts.userId,
-			"task_id": opts.TaskId,
-			"error":   err.Error(),
-		}).Error("/run_task: error communicating with watchman")
+			"user_id":     opts.userId,
+			"task_id":     opts.TaskId,
+			"raw_request": string(bodyReq[:]),
+			"error":       err.Error(),
+		}).Error("/run_task: error communicating with watchman (sendRequestToWatchman)")
 		return
 	}
 
