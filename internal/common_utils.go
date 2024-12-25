@@ -274,6 +274,7 @@ func InjectCodeToWrapper(opts *Options, wrapperName string) error {
 	i := strings.Index(s, injectMarker) // one and only marker index in wrapper
 
 	if i == -1 {
+		opts.SourceCodeRun = s
 		return nil
 	}
 
