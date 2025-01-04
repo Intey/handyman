@@ -95,7 +95,7 @@ func extractOptionsRunTask(r *http.Request) (Options, error) {
 
 func sendRequestToWatchman(api string, postBody *[]byte) ([]byte, error) {
 	client := &http.Client{
-		Timeout: timeoutReplyFromWatchman,
+		Timeout: 0,
 	}
 	req, err := http.NewRequest("POST", api, bytes.NewBuffer(*postBody))
 	if err != nil {
