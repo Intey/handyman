@@ -9,12 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
-const timeoutReplyFromWatchman = 45 * time.Second
 const addrWatchman = "http://127.0.0.1:8000/check"
 const addrWatchmanPlayground = "http://127.0.0.1:8000/playground"
 const addrWatchmanPractice = "http://127.0.0.1:8000/practice"
@@ -95,7 +93,7 @@ func extractOptionsRunTask(r *http.Request) (Options, error) {
 
 func sendRequestToWatchman(api string, postBody *[]byte) ([]byte, error) {
 	client := &http.Client{
-		Timeout: timeoutReplyFromWatchman,
+		Timeout: 0,
 	}
 	req, err := http.NewRequest("POST", api, bytes.NewBuffer(*postBody))
 	if err != nil {
