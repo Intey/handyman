@@ -452,6 +452,7 @@ func HandleSaveTask(w http.ResponseWriter, r *http.Request) {
 		})
 
 		w.Write(body)
+		return
 	}
 
 	Logger.WithFields(log.Fields{

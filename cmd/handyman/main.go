@@ -65,8 +65,6 @@ func main() {
 	r.HandleFunc("/merge_users", internal.HandleMergeUsers)
 	r.HandleFunc("/split_users", internal.HandleSplitUsers)
 
-	r.HandleFunc("/request_more_chapters", internal.HandleRequestMoreChapters)
-
 	r.Handle("/metrics", promhttp.Handler())
 
 	r.HandleFunc("/run_code", internal.HandleRunCode)
