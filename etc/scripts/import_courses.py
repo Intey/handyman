@@ -14,7 +14,7 @@ from psycopg2 import sql
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)-8s %(message)s"
 )
-click_extra.logging.logger.set_logger(logging.getLogger())
+#click_extra.logging.logger.set_logger(logging.getLogger())
 
 
 def run_cmd(conn, cmd) -> None:
@@ -158,7 +158,8 @@ def import_practice_for_course(practice_dir: str, course_id: str, conn) -> None:
 
         insert = sql.SQL(
             """INSERT INTO practice VALUES {}
-            ON CONFLICT (project_id) DO NOTHING"""
+            ON CONFLICT (project_id) DO UPDATE
+            SET title=EXCLUDED.title, chapter_id=EXCLUDED.chapter_id, main_file=EXCLUDED.main_file, default_cmd_line_args=EXCLUDED.default_cmd_line_args"""
         ).format(sql.SQL(",").join(map(sql.Literal, [(project_id, title, data["chapter_id"], data["main_file"], data["default_cmd_line_args"], course_id), ])))
 
         run_cmd(conn, insert)
