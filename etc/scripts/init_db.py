@@ -22,10 +22,11 @@ def run_cmd(conn, cmd) -> None:
         cursor.execute(cmd)
 
 
-def init_schema(cursor, schema_file: str) -> None:
+def init_schema(conn, schema_file: str) -> None:
     logging.info(f"apply migration {schema_file}...")
     with open(schema_file, "r") as f:
-        cursor.execute(f.read())
+        with conn.cursor() as cursor:
+            cursor.execute(f.read())
 
 
 def import_courses(courses_dir: str, conn) -> List:
@@ -61,8 +62,12 @@ def import_courses(courses_dir: str, conn) -> List:
     return course_ids
 
 
-def get_chapter_title(chapter_dir: str) -> str:
+def get_chapter_title(chapter_dir: str) -> str|None:
+
     chapter_text_path = os.path.join(chapter_dir, "text.md")
+
+    if not os.path.exists(chapter_text_path):
+        return None
 
     # First line of file is chapter's title:
     with open(chapter_text_path) as f:
@@ -79,6 +84,9 @@ def import_chapters_for_course(course_dir: str, course_id: str, conn) -> None:
             continue
 
         title = get_chapter_title(os.path.join(course_dir, chapter_id))
+        if title is None:
+            logging.warn(f"Course {course_id}. Can't find {os.path.join(course_dir, chapter_id)}/text.md")
+            continue
 
         chapter_data = (chapter_id, course_id, title)
         chapters.append(chapter_data)
@@ -199,24 +207,25 @@ def import_practice(courses_dir: str, course_ids: List,conn) -> None:
     help="Format: postgresql://user:password@host:port/db?params",
 )
 @argument(
-    "migrations",
+    "migration_dir",
     type=click.Path(
-        exists=True, dir_okay=False, path_type=Path, resolve_path=True
+        exists=True, dir_okay=True, path_type=Path, resolve_path=True
     ),
-    nargs=-1,
-    help="Schema files to be initialized. Supposed to be passed in correct order"
+    help="Directory with sql files to be initialized"
 )
-def main(courses_dir: str, postgres_conn: str, migrations: list[Path]) -> None:
+def main(courses_dir: str, postgres_conn: str, migration_dir: Path) -> None:
     try:
         logging.info(f"Started courses import from {courses_dir} to db...")
 
         conn = psycopg2.connect(postgres_conn)
         conn.autocommit=True
-        with conn.cursor() as cursor:
-            for schema in migrations:
-                logging.info(f"apply migration {schema}...")
-                with open(schema, "r") as f:
-                    cursor.execute(f.read())
+        migrations_files = [ migration_dir/file for file in os.listdir(migration_dir) ]
+
+        if migrations_files:
+            with conn.cursor() as cursor:
+                for schema in migrations_files:
+                    logging.info(f"apply migration {schema}...")
+                    init_schema(conn, schema)
 
         course_ids = import_courses(courses_dir, conn)
         import_chapters(courses_dir, course_ids, conn)
