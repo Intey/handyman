@@ -23,8 +23,6 @@ var DB *sql.DB
 
 var WP *workerpool.WorkerPool
 
-const connStr = "postgresql://senjun:some_password@127.0.0.1:5432/senjun?sslmode=disable"
-
 var Logger *log.Logger
 
 // --------------- METRICS
@@ -181,7 +179,7 @@ var countGetChapterOk = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "handyman_get_chapter_ok",
 })
 
-func ConnectDb() *sql.DB {
+func ConnectDb(connStr string) *sql.DB {
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		Logger.WithFields(log.Fields{
@@ -1887,7 +1885,8 @@ func HandleGetCourseInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-func HandlePracticeCode(w http.ResponseWriter, r *http.Request) {
+func CreateHandlePracticeCode(watchmanConnStr string) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 	countRunPracticeTotal.Inc()
 
 	w.WriteHeader(http.StatusOK)
@@ -1979,7 +1978,7 @@ func HandlePracticeCode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		bodyResp, err := sendRequestToWatchman(addrWatchmanPractice, &bodyReq)
+		bodyResp, err := sendRequestToWatchman(watchmanConnStr, &bodyReq)
 
 		if err != nil {
 			countRunPracticeErrServer.Inc()
@@ -2034,6 +2033,7 @@ func HandlePracticeCode(w http.ResponseWriter, r *http.Request) {
 	}).Info("/handle_practice_code: completed")
 
 	json.NewEncoder(w).Encode(res)
+}
 }
 
 func HandleGetPractice(w http.ResponseWriter, r *http.Request) {
